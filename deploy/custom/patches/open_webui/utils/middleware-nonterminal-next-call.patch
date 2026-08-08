@@ -1,0 +1,64 @@
+--- a/open_webui/utils/middleware.py
++++ b/open_webui/utils/middleware.py
+@@ -4952,6 +4952,7 @@
+                     results = []
+ 
+                     def parse_tool_params(tool_call):                    all_tool_results_terminal = bool(response_tool_calls)
++                    nonterminal_next_calls = []
+ 
+                         tool_args = tool_call.get('function', {}).get('arguments', '{}')
+                         params = {}
+@@ -5065,6 +5066,22 @@
+                         )
+                         all_tool_results_terminal = all_tool_results_terminal and is_terminal_answer
+ 
++                        # NTC nonterminal next-call handshake: navigation stages cannot
++                        # end the turn. Keep the model in the normal tool loop and bind
++                        # its next call to the signed contract returned by the tool.
++                        if (
++                            isinstance(terminal_payload, dict)
++                            and terminal_payload.get('ok') is True
++                            and terminal_payload.get('terminal') is False
++                            and terminal_payload.get('action_required')
++                            and isinstance(terminal_payload.get('next_call'), dict)
++                        ):
++                            next_call = terminal_payload['next_call']
++                            if next_call not in nonterminal_next_calls:
++                                nonterminal_next_calls.append(next_call)
++
++                        all_tool_results_terminal = all_tool_results_terminal and is_terminal_answer
++
+                         await terminal_event_handler(
+                             tool_function_name,
+                             tool_function_params,
+@@ -5306,6 +5323,30 @@
+                                     ),
+                                 }
+                             )
++
++                        elif nonterminal_next_calls:
++                            continuation_contracts = []
++                            for next_call in nonterminal_next_calls:
++                                next_tool = next_call.get('tool')
++                                next_arguments = next_call.get('arguments')
++                                if isinstance(next_tool, str) and isinstance(next_arguments, dict):
++                                    continuation_contracts.append(
++                                        {'tool': next_tool, 'arguments': next_arguments}
++                                    )
++                            if continuation_contracts:
++                                continuation_instruction = (
++                                    'Trusted server-side tool results require continuation before answering. '
++                                    'Complete every independent continuation contract below. Calls without '
++                                    'dependencies may run in parallel; preserve each exact signed JSON argument: '
++                                    f'{json.dumps(continuation_contracts, ensure_ascii=False, separators=(",", ":"))}. '
++                                    'Do not answer from navigation-only output or discard an open branch because '
++                                    'another branch completed.'
++                                )
++                                new_form_data['messages'] = add_or_update_system_message(
++                                    continuation_instruction,
++                                    new_form_data['messages'],
++                                    append=True,
++                                )
+ 
+                         res = await generate_chat_completion(
+                             request,

@@ -1,0 +1,18 @@
+# Build context: Dockerfile + patches only (compose runs from deploy/custom).
+
+.env
+.env.example
+.git
+README.md
+compose.yaml
+nginx/
+newtecons.vn/
+tests/
+scripts/
+community/
+__pycache__/
+*.pyc
+sp_state/
+eval/
+agent_simulation_runs/
+backups/

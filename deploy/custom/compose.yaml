@@ -1,0 +1,182 @@
+name: open-webui
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "5"
+
+x-security: &default-security
+  security_opt:
+    - no-new-privileges:true
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    pull_policy: always
+    command:
+      - "-c"
+      - "max_connections=200"
+      - "-c"
+      - "shared_buffers=1GB"
+      - "-c"
+      - "effective_cache_size=3GB"
+      - "-c"
+      - "work_mem=8MB"
+      - "-c"
+      - "maintenance_work_mem=128MB"
+    environment:
+      POSTGRES_USER: webui
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: openwebui
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U webui -d openwebui"]
+      interval: 10s
+      retries: 5
+    networks: [default]
+    cpus: 2
+    mem_limit: 4G
+    cpu_shares: 2048
+    labels:
+      stack: open-webui
+    logging: *default-logging
+    <<: *default-security
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+
+  redis:
+    # Unify with firecrawl/litellm on redis 7.4.10 (exact patch tag).
+    image: redis:7.4.10-alpine
+    pull_policy: always
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      retries: 5
+    networks: [default]
+    cpus: 1
+    mem_limit: 512M
+    cpu_shares: 2048
+    labels:
+      stack: open-webui
+    logging: *default-logging
+    <<: *default-security
+    cap_drop: [ALL]
+    cap_add: [SETGID, SETUID]
+
+  open-webui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: open-webui-ntc:0.11.0-terminal-v1
+    pull_policy: build
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://webui:${DB_PASSWORD}@open-webui-postgres-1:5432/openwebui
+      PGVECTOR_DB_URL: postgresql://webui:${DB_PASSWORD}@open-webui-postgres-1:5432/openwebui
+    volumes:
+      - open-webui:/app/backend/data
+    ports:
+      - "127.0.0.1:3000:8080"
+    restart: unless-stopped
+    networks: [default, edge, litellm, firecrawl, mineru, ntc-rag]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    cpus: 12
+    mem_limit: 16G
+    cpu_shares: 2048
+    labels:
+      stack: open-webui
+    logging: *default-logging
+    <<: *default-security
+
+  open-terminal:
+    # Follows upstream default (no custom patch). Pinned to 0.11.20 by digest:
+    # bump the digest (and tag) to upgrade.
+    image: ghcr.io/open-webui/open-terminal@sha256:25c5b82d703c7da33ad3c28a2b581d06147feed2a84adfae6c8b656ff010b0eb
+    pull_policy: always
+    environment:
+      OPEN_TERMINAL_API_KEY: ${OPEN_TERMINAL_API_KEY}
+    volumes:
+      - open-terminal:/home/user
+    restart: unless-stopped
+    networks: [default]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    cpus: 2
+    mem_limit: 1G
+    cpu_shares: 2048
+    labels:
+      stack: open-webui
+    logging: *default-logging
+
+  nginx:
+    image: nginx:alpine
+    pull_policy: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./newtecons.vn/fullchain.crt:/etc/nginx/certs/fullchain.crt:ro
+      - ./newtecons.vn/private.key:/etc/nginx/certs/private.key:ro
+    restart: unless-stopped
+    networks: [default, edge]
+    depends_on:
+      - open-webui
+    healthcheck:
+      test: ["CMD-SHELL", "grep -q ':0050 .* 0A ' /proc/net/tcp && grep -q ':01BB .* 0A ' /proc/net/tcp"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    cpus: 0.5
+    mem_limit: 128M
+    cpu_shares: 2048
+    labels:
+      stack: open-webui
+    logging: *default-logging
+    <<: *default-security
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE, CHOWN, SETGID, SETUID, DAC_OVERRIDE]
+
+volumes:
+  postgres:
+  redis:
+  open-webui:
+  open-terminal:
+
+networks:
+  default:
+    name: open-webui_default
+  edge:
+    name: edge
+  litellm:
+    external: true
+    name: litellm_default
+  firecrawl:
+    external: true
+    name: firecrawl
+  mineru:
+    external: true
+    name: mineru_default
+  ntc-rag:
+    external: true
+    name: ntc-rag

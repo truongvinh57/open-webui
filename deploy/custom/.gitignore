@@ -1,0 +1,13 @@
+# deploy/custom/.gitignore
+
+.env
+newtecons.vn/
+*.key
+*.pfx
+passfile_pfx.txt
+__pycache__/
+*.pyc
+sp_state/
+eval/
+agent_simulation_runs/
+backups/

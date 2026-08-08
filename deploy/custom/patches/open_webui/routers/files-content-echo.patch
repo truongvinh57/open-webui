@@ -1,0 +1,18 @@
+--- a/open_webui/routers/files.py
++++ b/open_webui/routers/files.py
+@@ -641,6 +641,15 @@
+                             event = {'status': status}
+                             if status == 'failed':
+                                 event['error'] = data.get('error')
++                            elif status == 'completed':
++                                # NTC patch (cosmetic): echo extracted content in the final SSE
++                                # event so the chat-input file tile shows real content instead of
++                                # the "No content" placeholder. Upstream streams only {status} and
++                                # never returns parsed content, leaving fileItem.file.data.content
++                                # undefined in FileItemModal.svelte. Functional path (chat +
++                                # file_context) is unaffected — the server reads data.content from
++                                # the DB on submit; this only fixes the preview tile.
++                                event['content'] = data.get('content', '')
+ 
+                             yield f'data: {json.dumps(event)}\n\n'
+                             if status in ('completed', 'failed'):

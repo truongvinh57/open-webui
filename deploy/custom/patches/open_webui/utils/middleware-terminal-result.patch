@@ -1,0 +1,64 @@
+--- a/open_webui/utils/middleware.py
++++ b/open_webui/utils/middleware.py
+@@ -4951,7 +4951,8 @@
+ 
+                     results = []
+ 
+-                    def parse_tool_params(tool_call):
++                    def parse_tool_params(tool_call):                    all_tool_results_terminal = bool(response_tool_calls)
++
+                         tool_args = tool_call.get('function', {}).get('arguments', '{}')
+                         params = {}
+                         if tool_args and tool_args.strip():
+@@ -5048,6 +5049,22 @@
+                             user,
+                         )
+ 
++                        # NTC terminal tool-result handshake: preserve the result, then force
++                        # the continuation to produce a final answer without another tool call.
++                        try:
++                            terminal_payload = (
++                                json.loads(tool_result) if isinstance(tool_result, str) else tool_result
++                            )
++                        except (TypeError, ValueError):
++                            terminal_payload = None
++                        is_terminal_answer = (
++                            isinstance(terminal_payload, dict)
++                            and terminal_payload.get('terminal') is True
++                            and terminal_payload.get('retryable') is False
++                            and terminal_payload.get('action_required') == 'answer_now'
++                        )
++                        all_tool_results_terminal = all_tool_results_terminal and is_terminal_answer
++
+                         await terminal_event_handler(
+                             tool_function_name,
+                             tool_function_params,
+@@ -5226,6 +5243,10 @@
+                             'stream': True,
+                             'metadata': metadata,
+                         }
++                        if all_tool_results_terminal:
++                            new_form_data['tools'] = []
++                            new_form_data['tool_choice'] = 'none'
++
+ 
+                         if ENABLE_RESPONSES_API_STATEFUL and last_response_id:
+                             system_message = get_system_message(form_data['messages'])
+@@ -5274,6 +5295,17 @@
+                                         ],
+                                     }
+                                 )
++
++                        if all_tool_results_terminal:
++                            new_form_data['messages'].append(
++                                {
++                                    'role': 'user',
++                                    'content': (
++                                        'Return the final answer now in the user language. '
++                                        'Do not emit tool calls, DSML, XML, or tool syntax.'
++                                    ),
++                                }
++                            )
+ 
+                         res = await generate_chat_completion(
+                             request,
