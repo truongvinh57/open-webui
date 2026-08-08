@@ -26,6 +26,8 @@ def patched_middleware_source() -> str:
                 capture_output=True,
                 text=True,
             )
+        # The patched file must stay syntactically valid.
+        compile(target.read_bytes(), str(target), 'exec')
         return target.read_text(encoding='utf-8')
 
 

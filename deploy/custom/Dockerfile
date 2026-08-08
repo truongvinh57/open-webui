@@ -7,7 +7,7 @@ RUN echo "${MIDDLEWARE_SHA256}  /app/backend/open_webui/utils/middleware.py" | s
     && grep -q "NTC terminal tool-result handshake" /app/backend/open_webui/utils/middleware.py \
     && rm /tmp/middleware-terminal-result.patch
 
-ARG TERMINAL_PATCHED_MIDDLEWARE_SHA256=a7cf6628f7a4f0d22421b6da8ca70056525112e953269a241d7ad4232ede0130
+ARG TERMINAL_PATCHED_MIDDLEWARE_SHA256=86cbb0d3d5c6e4ff019ece8db11c84abd04bac348974d10caac97e3b64113067
 COPY patches/open_webui/utils/middleware-nonterminal-next-call.patch /tmp/middleware-nonterminal-next-call.patch
 RUN echo "${TERMINAL_PATCHED_MIDDLEWARE_SHA256}  /app/backend/open_webui/utils/middleware.py" | sha256sum -c - \
     && patch --batch --forward -d /app/backend -p1 < /tmp/middleware-nonterminal-next-call.patch \

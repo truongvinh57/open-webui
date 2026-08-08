@@ -1,15 +1,13 @@
 --- a/open_webui/utils/middleware.py
 +++ b/open_webui/utils/middleware.py
-@@ -4951,7 +4951,8 @@
+@@ -4950,6 +4950,7 @@
+                     tools = metadata.get('tools', {})
  
                      results = []
++                    all_tool_results_terminal = bool(response_tool_calls)
  
--                    def parse_tool_params(tool_call):
-+                    def parse_tool_params(tool_call):                    all_tool_results_terminal = bool(response_tool_calls)
-+
+                     def parse_tool_params(tool_call):
                          tool_args = tool_call.get('function', {}).get('arguments', '{}')
-                         params = {}
-                         if tool_args and tool_args.strip():
 @@ -5048,6 +5049,22 @@
                              user,
                          )

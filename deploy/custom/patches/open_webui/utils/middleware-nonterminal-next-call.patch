@@ -1,13 +1,13 @@
 --- a/open_webui/utils/middleware.py
 +++ b/open_webui/utils/middleware.py
-@@ -4952,6 +4952,7 @@
-                     results = []
+@@ -4951,6 +4951,7 @@
  
-                     def parse_tool_params(tool_call):                    all_tool_results_terminal = bool(response_tool_calls)
+                     results = []
+                     all_tool_results_terminal = bool(response_tool_calls)
 +                    nonterminal_next_calls = []
  
+                     def parse_tool_params(tool_call):
                          tool_args = tool_call.get('function', {}).get('arguments', '{}')
-                         params = {}
 @@ -5065,6 +5066,22 @@
                          )
                          all_tool_results_terminal = all_tool_results_terminal and is_terminal_answer
